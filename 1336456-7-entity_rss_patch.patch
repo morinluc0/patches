@@ -6,9 +6,6 @@ index 12cd58f..620086f 100644
  files[] = views/handlers/entity_views_handler_field_uri.inc
  files[] = views/handlers/entity_views_handler_relationship_by_bundle.inc
  files[] = views/handlers/entity_views_handler_relationship.inc
--files[] = views/plugins/entity_views_plugin_row_entity_view.inc
-\ No newline at end of file
-+files[] = views/plugins/entity_views_plugin_row_entity_view.inc
 +files[] = views/plugins/entity_views_plugin_row_entity_rss.inc
 diff --git a/views/entity.views.inc b/views/entity.views.inc
 index 596d721..4475e00 100644
