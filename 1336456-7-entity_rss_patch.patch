@@ -15,7 +15,7 @@ index 596d721..4475e00 100644
            'type' => 'normal',
            'base' => $base_tables,
          ),
-+	'entity_rss' => array (
++ 'entity_rss' => array (
 +	  'title' => t('Entity as RSS items'),
 +	  'help' => t('Renders a single entity in a specifix view mode as an RSS item.'),
 +	  'handle' => 'entity_views_plugin_row_entity_rss',
