@@ -23,6 +23,7 @@ files[] = views/handlers/entity_views_handler_field_uri.inc
 files[] = views/handlers/entity_views_handler_relationship_by_bundle.inc
 files[] = views/handlers/entity_views_handler_relationship.inc
 files[] = views/plugins/entity_views_plugin_row_entity_view.inc
+
 ; Information added by drupal.org packaging script on 2011-11-10
 version = "7.x-1.0-rc1"
 core = "7.x"
