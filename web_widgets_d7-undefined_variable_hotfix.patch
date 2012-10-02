@@ -1,0 +1,13 @@
+diff --git a/iframe/web_widgets_iframe_wrapper.tpl.php b/iframe/web_widgets_iframe_wrapper.tpl.php
+index 94e26c5..0370887 100644
+--- a/iframe/web_widgets_iframe_wrapper.tpl.php
++++ b/iframe/web_widgets_iframe_wrapper.tpl.php
+@@ -8,7 +8,7 @@
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml">
+   <head>
+-    <?php print $head ?>
++    <?php !empty($head) ? print $head : '' ?>
+     <?php !empty($styles) ? print $styles : '' ?>
+     <?php !empty($scripts) ? print $scripts : '' ?>
+     <title><?php print $title ?></title>
