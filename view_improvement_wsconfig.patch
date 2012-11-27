@@ -1,0 +1,215 @@
+commit 5a37462493e0c5039f3176eb232b1159359dba65
+Author: lmori4 <lmori4@lmori4-Latitude-E6410.(none)>
+Date:   Tue Nov 27 11:28:01 2012 -0500
+
+    view functionality of the wsconfig module
+
+diff --git a/modules/wsconfig/wsconfig.admin.inc b/modules/wsconfig/wsconfig.admin.inc
+index a9c73e4..333e75b 100644
+--- a/modules/wsconfig/wsconfig.admin.inc
++++ b/modules/wsconfig/wsconfig.admin.inc
+@@ -19,6 +19,17 @@ function wsconfig_form_wrapper($wsconfig) {
+   return drupal_get_form('wsconfig_edit_form', $wsconfig);
+ }
+ 
++/**
++ * Form callback wrapper: view a wsconfig.
++ *
++ * @param $wsconfig
++ *   The wsconfig object being viewed by this form.
++ *
++ * @see wsconfig_view_form()
++ */
++function wsconfig_view_form_wrapper($wsconfig) {
++  return drupal_get_form('wsconfig_view_form', $wsconfig);
++}
+ 
+ /**
+  * Form callback wrapper: delete a wsconfig.
+@@ -188,6 +199,160 @@ function wsconfig_form_submit_delete(&$form, &$form_state) {
+   $form_state['redirect'] = 'admin/content/wsconfig/wsconfig/' . $form_state['wsconfig']->wsconfig_id . '/delete';
+ }
+ 
++/**
++ * Form callback: to view a wsconfig.
++ *
++ * @param $wsconfig
++ *   The wsconfig to use to view 
++ *
++ */
++function wsconfig_view_form($form, &$form_state, $wsconfig) {
++  $form_state['wsconfig'] = $wsconfig;
++  $ws_endpoint = wsconfig_get_types($wsconfig->type);
++  
++  //ws endpoint display
++  $form['endpoint'] = array(
++    '#type' => 'item',
++    '#title' => t('Endpoint'),
++    '#markup' => $wsconfig->type . ' (' . $ws_endpoint->data['endpoint'] . ')',
++  );
++
++
++  //Get the crud operations 
++  $method = $wsconfig->data;
++
++  if(isset($method['read_data_method'])) {
++    //Display the Read path
++
++    $form['get'] = array(
++      '#type' => 'fieldset',
++      '#title' => t('Read'),
++      '#collapsible' => TRUE,
++      '#collapsed' => TRUE,
++    );
++
++    $form['get']['method'] = array(
++      '#type' => 'item',
++      '#title' => t('Read'),
++      '#markup' => $method['read_data_method'],
++    );
++    
++    $operation = $method['read_data_method'];
++    //Time to check if there are any param that need to be populated.
++    for($i = 0;($param = strpbrk($operation, '%')); $i++) {   
++
++      //Get the list of params
++      if($pos = strpos($param, '/')) {
++      }elseif($pos = strpos($param, '?')) {
++      }elseif($pos = strpos($param, '&')) {
++      }else{
++        $pos = strlen($param);
++      }
++
++      $form['get'][substr($param, 0, $pos)] = array(
++        '#type' => 'textfield',
++        '#title' => substr($param, 0, $pos),
++        '#required' => TRUE,
++        '#default_value' => isset($form_state['values'][substr($param, 0, $pos)]) ? $form_state['values'][substr($param, 0, $pos)] : '',
++      );
++      $operation = substr($param, ($pos+1));
++    }
++
++    $form['get']['submit'] = array(
++      '#type' => 'submit',
++      '#value' => t('GET'),
++    );
++  } 
++  elseif(isset($method['create_data_method'])) {
++    //TODO: Need to figure out a way to create a proper PUT method
++    $form['put'] = array(
++      '#type' => 'fieldset',
++      '#title' => t('Create'),
++      '#collapsible' => TRUE,
++      '#collapsed' => TRUE,
++    );
++    $form['put']['submit'] = array(
++      '#type' => 'submit',
++      '#value' => t('PUT'),
++    );
++  }
++  elseif(isset($method['update_data_method'])) {
++    //TODO: Need to figure out a way to create a proper POST method
++    $form['post'] = array(
++      '#type' => 'fieldset',
++      '#title' => t('Update'),
++      '#collapsible' => TRUE,
++      '#collapsed' => TRUE,
++    );
++    $form['post']['submit'] = array(
++      '#type' => 'submit',
++      '#value' => t('POST'),
++    );
++  }
++  elseif(isset($method['delete_data_method'])) {
++    //TODO: Need to figure out a way to create a proper DELETE method
++    $form['delete'] = array(
++      '#type' => 'fieldset',
++      '#title' => t('Delete'),
++      '#collapsible' => TRUE,
++      '#collapsed' => TRUE,
++    );
++    $form['delete']['submit'] = array(
++      '#type' => 'submit',
++      '#value' => t('DELETE'),
++    );
++  }
++  //Display the result area if there is a result
++  if(!empty($form_state['result'])) { 
++   $form['url'] = array(
++      '#type' => 'item',
++      '#title' => t('Request URL'),
++      '#markup' => $form_state['url'],
++    );   
++    
++    $form['request'] = array(
++      '#type' => 'item',
++      '#title' => t('Request'),
++      '#markup' => $form_state['result']->request,
++    );
++
++    $form['code'] = array(
++      '#type' => 'item',
++      '#title' => t('Status Code'),
++      '#markup' => $form_state['result']->status_message . ' code = ' . $form_state['result']->code,
++    );
++    //Further implementation to make a JS drop down
++    $form['result_area'] = array(
++      '#type' => 'item',
++      '#title' => t('Result'),
++      '#markup' => htmlspecialchars($form_state['result']->data),
++    );
++  }
++  return $form;
++}
++
++/**
++ * Submit callback for wsconfig_view_form
++ */
++function wsconfig_view_form_submit($form, &$form_state) {
++  $wsconfig = $form_state['wsconfig'];
++
++  //Only Perform the GET for the time being
++  if($form_state['clicked_button']['#value'] == 'GET') {
++    $keys = array_keys($form_state['values']);
++    $path = $wsconfig->data['read_data_method'];
++    foreach($keys as $key) {
++      if(substr($key, 0, 1) == '%') {
++        $path = str_replace($key, $form_state['values'][$key], $path);
++      }
++    }
++    $ws_endpoint = wsconfig_get_types($wsconfig->type);
++    $url = $ws_endpoint->data['endpoint'] . '/' . $path;
++    $form_state['result'] = drupal_http_request($url, array('method' => 'GET'));
++    $form_state['url'] = $url;
++    $form_state['rebuild'] = TRUE;  
++  }
++}
+ 
+ /**
+  * Form callback: confirmation form for deleting a wsconfig.
+@@ -278,4 +443,4 @@ function wsconfig_set_breadcrumb() {
+   );
+ 
+   drupal_set_breadcrumb($breadcrumb);
+-}
+\ No newline at end of file
++}
+diff --git a/modules/wsconfig/wsconfig.entity.inc b/modules/wsconfig/wsconfig.entity.inc
+index 27ce50b..4963d6d 100644
+--- a/modules/wsconfig/wsconfig.entity.inc
++++ b/modules/wsconfig/wsconfig.entity.inc
+@@ -176,11 +176,13 @@ class WsConfigUIController extends EntityDefaultUIController {
+       //'title' => 'Title',
+       'title callback' => 'wsconfig_page_title',
+       'title arguments' => array(1),
+-      'page callback' => 'wsconfig_page_view',
++      'page callback' => 'wsconfig_view_form_wrapper',
+       'page arguments' => array(1),
+       'access callback' => 'wsconfig_access',
+       'access arguments' => array('view', 1),
+       'type' => MENU_CALLBACK,
++      'file' => 'wsconfig.admin.inc',
++      'file path' => drupal_get_path('module', $this->entityInfo['module'])
+     );
+     return $items;
+   }
