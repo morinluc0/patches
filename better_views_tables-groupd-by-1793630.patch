@@ -1,0 +1,17 @@
+diff --git a/bvt.views.inc b/bvt.views.inc
+index 8e86076..6bc3345 100644
+--- a/bvt.views.inc
++++ b/bvt.views.inc
+@@ -22,9 +22,9 @@ function bvt_views_plugins() {
+         'uses row class' => TRUE,
+         'uses fields' => TRUE,
+         'uses options' => TRUE,
+-        'uses grouping' => FALSE,
++        'uses grouping' => TRUE,
+         'type' => 'normal',
+       ),
+     ),
+   );
+-}
+\ No newline at end of file
++}
