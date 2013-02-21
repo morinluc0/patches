@@ -1,0 +1,568 @@
+diff --git a/eck.classes.inc b/eck.classes.inc
+index 91fa890..cd01133 100644
+--- a/eck.classes.inc
++++ b/eck.classes.inc
+@@ -17,6 +17,7 @@ class DBObject implements Iterator{
+   protected function __construct($table){
+     $this->serialize = array();
+     $this->is_new = TRUE;
++    
+     //Iterator variable
+     $this->position = 0;
+     
+@@ -32,7 +33,6 @@ class DBObject implements Iterator{
+       $this->table = $table;
+       $this->primary_keys = $schemas[$table]["primary key"];
+       $this->vars = array_keys($schemas[$table]['fields']);
+-      
+       //do we want to handle searialized variables by default? let's do it
+       //and wait for some critizism
+       foreach($schemas[$table]['fields'] as $name => $field){
+@@ -44,7 +44,7 @@ class DBObject implements Iterator{
+         if($schemas[$table]['fields'][$var]['type'] != "serial"){
+           $this->data[$var] = NULL;
+         }
+-      };
++      }
+     }else{
+       //@todo throw an exception
+     }
+@@ -75,7 +75,6 @@ class DBObject implements Iterator{
+   
+   //DB Interaction Functions
+   public function save(){
+-    
+     //before we save, lets serialize the properties that require it
+     foreach($this->serialize as $property){
+    
+@@ -180,6 +179,11 @@ class EntityType extends DBObject{
+     parent::__construct('eck_entity_type');
+     $this->properties = array();
+     $this->changes = array();
++    $this->menu_wildcard = '';
++  }
++  
++  public function __toString() {
++    return $this->name;
+   }
+   
+   public function addProperty($name, $label, $type, $behavior = NULL){
+@@ -205,6 +209,13 @@ class EntityType extends DBObject{
+     }
+   }
+   
++  public function getMenuWildcard() {
++    if (empty($this->menu_wildcard)) {
++      return '%';
++    }
++    return '%' . $this->menu_wildcard;
++  }
++  
+   public function changeBehavior($name, $behavior){
+     $p = $this->properties;
+     //@todo check that type is an actual type
+@@ -261,7 +272,8 @@ class EntityType extends DBObject{
+       $schema = eck__entity_type__schema($this);
+       db_create_table("eck_{$this->name}", $schema);
+       
+-    }else{
++    }
++    else {
+       //modify the already existing table in accordance with the recorded changes
+       if(array_key_exists('add', $this->changes)){
+         foreach($this->changes['add'] as $name){
+@@ -281,7 +293,6 @@ class EntityType extends DBObject{
+         }
+       }
+     }
+-    
+     parent::save();
+     drupal_get_schema(NULL, TRUE);
+   }
+diff --git a/eck.entity.inc b/eck.entity.inc
+index 0f6eb39..e314469 100644
+--- a/eck.entity.inc
++++ b/eck.entity.inc
+@@ -267,6 +267,7 @@ function eck__entity__list($entity_type_name, $bundle_name) {
+  */
+ function eck__entity__add($entity_type_name, $bundle_name) {
+   $entity_type = entity_type_load($entity_type_name);
++
+   $bundle = bundle_load($entity_type_name, $bundle_name);
+   
+   $entity = entity_create($entity_type->name, array('type' => $bundle->name));
+@@ -278,19 +279,26 @@ function eck__entity__add($entity_type_name, $bundle_name) {
+  *
+  * @param $entity_type
+  *  (String) entity type
+- * @param $id
+- *  (int) The entities id
++ * @param mixed $id
++ *  An entity id or a loaded entity object
+  */
+ function eck__entity__build($entity_type, $bundle, $id) {
++  // Entity container
++  $entity = NULL;
++
++  // Check for an entity id
+   if (is_numeric($id)) {
+     
+     $entities = entity_load($entity_type->name, array($id));
+     if(array_key_exists($id, $entities)){
+-     $entity = $entities[$id];
+-    }else{
+-      $entity = NULL;
++      $entity = $entities[$id];
+     }
+-  }else{
++  }
++  // Check if we have instead a loaded entity
++  elseif (_eck_validate_loaded_entity_with_type($id, $entity_type->name)) {
++    $entity = $id;
++  }
++  else{
+     drupal_not_found();
+     exit();
+   }
+@@ -320,14 +328,27 @@ function eck__entity__build($entity_type, $bundle, $id) {
+  *  (int) the Id of the entity to be edited
+  */
+ function eck__entity__edit($entity_type_name, $bundle_name, $id) {
++  global $user;
++
++  // Entity container
++  $entity = NULL;
++  
+   if (is_numeric($id)) {
+     $entities = entity_load($entity_type_name, array($id));
+     $entity = $entities[$id];
+   }
+-
+-  global $user;
+-
+-  return drupal_get_form("eck__entity__form_edit_{$entity_type_name}_{$bundle_name}", $entity);
++  elseif (is_array($id)) {
++    // Look for an entity
++    while ($entity = array_shift($id)) {
++      if (_eck_validate_loaded_entity_with_type($entity, $entity_type_name)) {
++        break;
++      }
++    }
++  }
++  elseif (_eck_validate_loaded_entity_with_type($id, $entity_type_name)) {
++    $entity = $id;
++  }
++  return drupal_get_form("eck__entity__form", $entity);
+ }
+ 
+ /**
+@@ -345,21 +366,38 @@ function eck__entity__edit($entity_type_name, $bundle_name, $id) {
+  *  (int) the Id of the entity to be deleted
+  */
+ function eck__entity__delete($entity_type_name, $bundle_name, $id) {
++  // Entity container
++  $entity = NULL;
++  
++  if (is_numeric($id)) {
++    $entities = entity_load($entity_type_name, array($id));
++    $entity = $entities[$id];
++  }
++  elseif (is_array($id)) {
++    // Look for an entity
++    while ($entity = array_shift($id)) {
++      if (_eck_validate_loaded_entity_with_type($entity, $entity_type_name)) {
++        break;
++      }
++    }
++  }
++  elseif (_eck_validate_loaded_entity_with_type($id, $entity_type_name)) {
++    $entity = $id;
++  }
++
+   $entity_type = entity_type_load($entity_type_name);
+   $bundle = bundle_load($entity_type_name, $bundle_name);
+-  return drupal_get_form('eck__entity__delete_form', $entity_type, $bundle, $id);
++  return drupal_get_form('eck__entity__delete_form', $entity_type, $bundle, $entity);
+   
+ }
+ 
+-function eck__entity__delete_form($form, &$form_state, $entity_type, $bundle, $id){
++function eck__entity__delete_form($form, &$form_state, $entity_type, $bundle, $entity){
+   $path = eck__entity_type__path();
+-    
+-  $entities = entity_load($entity_type->name, array($id));
+ 
+   $form['entity'] =
+       array(
+         '#type' => 'value',
+-        '#value' => $entities[$id],
++        '#value' => $entity,
+   );
+ 
+   $form['entity_type'] =
+@@ -381,7 +419,7 @@ function eck__entity__delete_form($form, &$form_state, $entity_type, $bundle, $i
+   );
+ 
+   $message = t("Are you sure that you want to delete %id",
+-          array("%id" => $id));
++          array("%id" => $entity->id));
+ 
+   $caption = t("This action cannot be undone.");
+ 
+@@ -444,7 +482,7 @@ function eck__entity__form($form, $form_state, $entity) {
+   if(!$found_widget){
+     //If there was no widget given through the property_info array, we look for
+     //a widget in the property behaviors implemented
+-    $entity_type = $entity->entityType();
++    $entity_type = entity_type_load($entity->entityType());
+     $entity_type = EntityType::loadByName($entity_type);
+     
+     $vars = array('entity' => $entity);
+@@ -495,7 +533,7 @@ function eck__entity__form_submit($form, &$state) {
+   
+   field_attach_submit($entity->entityType(), $entity, $form, $state);
+   
+-  $entity_type = $entity->entityType();
++  $entity_type = entity_type_load($entity->entityType());
+   $entity_type = EntityType::loadByName($entity_type);
+   $properties = $entity_type->properties;
+   
+@@ -529,15 +567,42 @@ function eck__entity__form_submit($form, &$state) {
+  *  (int) the Id of the entity to be deleted
+  */
+ function eck__entity__view($entity_type_name, $bundle_name, $id) {
+-  $entity = entity_load($entity_type_name, array($id));
+-  $entity = $entity[$id];
++  // We add special handling for cases where the menu system has already loaded
++  // the entity object(s)
++  
++  // Container for entity object
++  $entity = NULL;
++  
++  // First we check if we've received a plain id
++  if (is_string($id) or is_numeric($id)) {
++    $entity = entity_load($entity_type_name, array($id));
++    $entity = $entity[$id];
++  }
++  // Next we check if we received an array of objects from a previous call to
++  // entity_load (typically occurs when using the wildcard load function)
++  elseif (is_array($id)) {
++    // Look for an entity
++    while ($entity = array_shift($id)) {
++      if (_eck_validate_loaded_entity_with_type($entity, $entity_type_name)) {
++        break;
++      }
++    }
++  }
++  //Lastly we check if the id is in fact a single entity object
++  elseif (_eck_validate_loaded_entity_with_type($id, $entity_type_name)) {
++    $entity = $id;
++  }
++  else {
++    // Invalid value passed
++    // @todo let things error or throw an exception?
++  }
+   
+   $entity_type = entity_type_load($entity_type_name);
+   $properties = $entity_type->properties;
+   $bundle = bundle_load($entity_type_name, $bundle_name);
+   
+   $build = array();
+-  $entity_view = eck__entity__build($entity_type, $bundle, $id);
++  $entity_view = eck__entity__build($entity_type, $bundle, $entity);
+   $property_view = array();
+   
+   $formatters = eck_property_behavior_invoke_plugin($entity_type, 'default_formatter', 
+diff --git a/eck.entity_type.inc b/eck.entity_type.inc
+index 382d1b8..0cc52e8 100644
+--- a/eck.entity_type.inc
++++ b/eck.entity_type.inc
+@@ -154,7 +154,18 @@ function eck__entity_type__form($form, &$state, $entity_type_name = NULL) {
+         'source' => array('bundle_label'),
+       ),
+     );
++    
+   }
++
++  $form['entity_type_menu_wildcard'] = array(
++    '#title' => t('Menu Wildcard'),
++    '#type' => 'textfield',
++    '#description' => t('The wildcard to use in menu paths (not including the % character) e.g. myentityname. Leave blank to use default. <em>Changing this value requires you to provide a proper _load and _to_arg callbacks so the menu system can load pages properly. These can be added in a separate module. See README.txt for an example.'),
++    '#default_value' => $entity_type->menu_wildcard,
++    '#element_validate' => array('_eck__entity_type__form_validate_menu_wildcard'),
++    '#disabled' => !$entity_type->is_new,
++  );
++
+   
+   $form = eck__default_properties__form($form, $state, $entity_type);
+   
+@@ -189,6 +200,13 @@ function eck__entity_type__form_validate($form, &$state) {
+ }
+ 
+ /**
++ * Element validation for menu_wildcard
++ */
++function _eck__entity_type__form_validate_menu_wildcard($element, &$form_state, $form) {
++  // @todo
++}
++
++/**
+  * Submit handler for adding an entity type.
+  *
+  * @param $form
+@@ -214,6 +232,9 @@ function eck__entity_type__form_submit($form, &$state) {
+       $entity_type_label = $state['values']['entity_type_label'];
+       $entity_type->label = $entity_type_label;
+       
++      $entity_type_menu_wildcard = $state['values']['entity_type_menu_wildcard'];
++      $entity_type->menu_wildcard = $entity_type_menu_wildcard;
++      
+       //Add the bundle to the table
+       //Process the bundle input from the user
+       if (!empty($state['values']['bundle_name'])) {
+@@ -426,17 +447,17 @@ function eck__entity_type__info($entity_type) {
+         ),
+         'edit' => 
+         array(
+-          'path' => $path."/%/edit",
++          'path' => $path."/{$entity_type->getMenuWildcard()}/edit",
+           'entity_id' => 5
+         ),
+         'delete' => 
+         array(
+-          'path' => $path."/%/delete",
++          'path' => $path."/{$entity_type->getMenuWildcard()}/delete",
+           'entity_id' => 5
+         ),
+         'view' => 
+         array(
+-          'path' => "{$entity_type->name}/{$bundle->name}/%",
++          'path' => "{$entity_type->name}/{$bundle->name}/{$entity_type->getMenuWildcard()}",
+           'entity_id' => 2
+         )
+       )
+diff --git a/eck.features.inc b/eck.features.inc
+index 2fb9c69..4755eae 100644
+--- a/eck.features.inc
++++ b/eck.features.inc
+@@ -51,6 +51,7 @@ function eck_entity_type_features_export_render($module, $data, $export = NULL)
+   $elements = array(
+     'name' => FALSE,
+     'label' => TRUE,
++    'menu_wildcard' => FALSE,
+     'properties' => FALSE,
+   );
+ 
+@@ -64,6 +65,7 @@ function eck_entity_type_features_export_render($module, $data, $export = NULL)
+     
+     $elements['name'] = $entity_type->name;
+     $elements['label'] = $entity_type->label;
++    $elements['menu_wildcard'] = $entity_type->menu_wildcard;
+     $elements['properties'] = $entity_type->properties;
+     $output[] = '       ' . "'{$entity_type->name}' => " . features_var_export($elements).",";
+   }
+diff --git a/eck.install b/eck.install
+index a986d38..df17006 100644
+--- a/eck.install
++++ b/eck.install
+@@ -62,17 +62,22 @@ function eck_schema() {
+       'name' => array(
+         'description' => "The machine name of the entity",
+         'type' => 'varchar',
+-        'type' => 'varchar',
+         'length' => 128,
+         'not null' => TRUE
+       ),
+       'label' => array(
+         'description' => "The entity's Label",
+         'type' => 'varchar',
+-        'type' => 'varchar',
+         'length' => 128,
+         'not null' => TRUE
+       ),
++      'menu_wildcard' => array(
++        'description' => "Entity menu wildcard override",
++        'type' => 'varchar',
++        'length' => 255,
++        'not null' => FALSE,
++        'default' => '',
++      ),
+       'properties' => array(
+         'type' => 'text',
+         'not null' => TRUE,
+@@ -519,3 +524,19 @@ function eck_update_7009() {
+   ));
+ }
+ 
++/**
++ * Implements hook_update_N().
++ *
++ * Adds menu wildcard configuration
++ */
++function eck_update_7010() {
++  // Add config field for bundles
++  db_add_field('eck_entity_type', 'menu_wildcard', array(
++    'description' => "Entity menu wildcard",
++    'type' => 'varchar',
++    'length' => 255,
++    'not null' => FALSE,
++  ));  
++}
++
++// @todo add update to all defined entities
+\ No newline at end of file
+diff --git a/eck.module b/eck.module
+index 41eea23..559d08d 100644
+--- a/eck.module
++++ b/eck.module
+@@ -120,8 +120,10 @@ function eck__entity__label($entity) {
+ function eck__entity__uri($entity) {
+ 
+   module_load_include('inc', 'eck', 'eck.entity');
+-  $crud_info = get_bundle_crud_info($entity->entityType(), $entity->type);
+-  $view_path = str_replace('%', $entity->identifier(), $crud_info['view']['path']);
++  $entity_type = entity_type_load($entity->entityType());
++
++  $crud_info = get_bundle_crud_info($entity_type->name, $entity->type);
++  $view_path = str_replace($entity_type->getMenuWildcard(), $entity->identifier(), $crud_info['view']['path']);
+   
+   return array('path' => $view_path);
+ }
+@@ -166,12 +168,12 @@ function entity_table($entities, $select = FALSE) {
+   $info = NULL;
+   foreach ($entities as $entity) {
+     $info = array();
+-    $entity_type = $entity->entityType();
++    $entity_type = entity_type_load($entity->entityType());
+     $bundle = $entity->type;
+     $id = $entity->id;
+     
+     if($crud_info == NULL){
+-      $crud_info = get_bundle_crud_info($entity_type, $bundle);
++      $crud_info = get_bundle_crud_info($entity_type->name, $bundle);
+     }
+     
+     $allowed_operations = '';
+@@ -184,7 +186,7 @@ function entity_table($entities, $select = FALSE) {
+              "eck edit {$entity_type} {$bundle} entities"
+             ), FALSE /* TODO: should also check user ownership perms. */ )
+     ){
+-      $edit_path = str_replace('%', $id, $crud_info['edit']['path']);
++      $edit_path = str_replace($entity_type->getMenuWildcard(), $id, $crud_info['edit']['path']);
+       $allowed_operations = l(t('edit'), $edit_path, array('query' => $destination));
+     }
+     
+@@ -196,11 +198,11 @@ function entity_table($entities, $select = FALSE) {
+              "eck delete {$entity_type} {$bundle} entities"
+             ), FALSE /* TODO: should also check user ownership perms. */ )
+     ){
+-      $delete_path = str_replace('%', $id, $crud_info['delete']['path']);
++      $delete_path = str_replace($entity_type->getMenuWildcard(), $id, $crud_info['delete']['path']);
+       $allowed_operations .= (($allowed_operations)?'<br />':'').l(t('delete'), $delete_path, array('query' => $destination));
+     }
+-    $uri = entity_uri($entity_type, $entity);
+-    $row = array(l(entity_label($entity_type, $entity), $uri['path'], $uri['options']));
++    $uri = entity_uri($entity_type->name, $entity);
++    $row = array(l(entity_label($entity_type->name, $entity), $uri['path'], $uri['options']));
+     $row[] = array('data' => $allowed_operations); //"admin/structure/eck/{$entity_type}/{$bundle}/{$id}/delete"));
+      
+     $info['entity'] = $entity;
+@@ -859,3 +861,31 @@ function eck_entity_view_alter(&$view){
+     }
+   }
+ }
++
++/**
++ * Validate the given object is of the given type
++ *
++ * @param object $entity
++ *  Entity object to test
++ * @param string|object $entity_type
++ *  Desired type, either the string machine name or an instance of EntityType
++ * @return boolean
++ *  Returns TRUE if the type matches, FALSE otherwise.
++ */
++function _eck_validate_loaded_entity_with_type($entity, $entity_type) {
++  if (!is_object($entity)) {
++    watchdog('eck', 'Non-object passed to _eck_validate_loaded_entity_with_type', array(), WATCHDOG_WARNING);
++    return FALSE;
++  }
++  
++  if (!isset($entity->type)) {
++    watchdog('eck', 'Missing type on object passed to _eck_validate_loaded_entity_with_type', array(), WATCHDOG_WARNING);
++    return FALSE;
++  }
++  
++  if ($entity->entityType() == $entity_type or (isset($entity_type->name) and $entity_type->name == $entity->entityType())) {
++    return TRUE;
++  }
++
++  return FALSE;
++}
+diff --git a/views/handlers/eck_views_handler_field_link.inc b/views/handlers/eck_views_handler_field_link.inc
+index 0703d49..49e30dd 100644
+--- a/views/handlers/eck_views_handler_field_link.inc
++++ b/views/handlers/eck_views_handler_field_link.inc
+@@ -31,9 +31,10 @@ class eck_views_handler_field_link extends views_handler_field_entity {
+   }
+ 
+   function render_link($entity, $values) {
+-    $crud_info = get_bundle_crud_info($entity->entityType(), $entity->type);
++    $entity_type = entity_type_load($entity->entityType());
++    $crud_info = get_bundle_crud_info($entity_type->name, $entity->type);
+     $this->options['alter']['make_link'] = TRUE;
+-    $this->options['alter']['path'] = str_replace('%', $entity->id, $crud_info['view']['path']);
++    $this->options['alter']['path'] = str_replace($entity_type->getMenuWildcard(), $entity->id, $crud_info['view']['path']);
+     $text = !empty($this->options['text']) ? $this->options['text'] : t('view');
+     
+     return $text;
+diff --git a/views/handlers/eck_views_handler_field_link_delete.inc b/views/handlers/eck_views_handler_field_link_delete.inc
+index 0272382..6482872 100644
+--- a/views/handlers/eck_views_handler_field_link_delete.inc
++++ b/views/handlers/eck_views_handler_field_link_delete.inc
+@@ -6,16 +6,17 @@
+ class eck_views_handler_field_link_delete extends eck_views_handler_field_link {
+   
+   function render_link($entity, $values) {
+-    $entity_type = $entity->entityType();
++    $entity_type = entity_type_load($entity->entityType());
+     $bundle = $entity->type;
+     
+     if (!user_access('eck administer entities') && !user_access('eck edit entities') && !user_access("eck administer {$entity_type} {$bundle} entities") && !user_access("eck edit {$entity_type} {$bundle} entities")) {
+       return;
+     }
+     
+-    $crud_info = get_bundle_crud_info($entity_type, $bundle);
++    $entity_type = entity_type_load($entity->entityType());
++    $crud_info = get_bundle_crud_info($entity_type->name, $entity->type);
+     $this->options['alter']['make_link'] = TRUE;
+-    $this->options['alter']['path'] = str_replace('%', $entity->id, $crud_info['delete']['path']);
++    $this->options['alter']['path'] = str_replace($entity_type->getMenuWildcard(), $entity->id, $crud_info['delete']['path']);
+     $text = !empty($this->options['text']) ? $this->options['text'] : t('delete');
+     
+     return $text;
+diff --git a/views/handlers/eck_views_handler_field_link_edit.inc b/views/handlers/eck_views_handler_field_link_edit.inc
+index 77ecdf6..d8df7ed 100644
+--- a/views/handlers/eck_views_handler_field_link_edit.inc
++++ b/views/handlers/eck_views_handler_field_link_edit.inc
+@@ -6,16 +6,17 @@
+ class eck_views_handler_field_link_edit extends eck_views_handler_field_link {
+   
+   function render_link($entity, $values) {
+-    $entity_type = $entity->entityType();
++    $entity_type = entity_type_load($entity->entityType());
+     $bundle = $entity->type;
+     
+     if (!user_access('eck administer entities') && !user_access('eck edit entities') && !user_access("eck administer {$entity_type} {$bundle} entities") && !user_access("eck delete {$entity_type} {$bundle} entities")) {
+       return;
+     }
+     
+-    $crud_info = get_bundle_crud_info($entity_type, $bundle);
++    $entity_type = entity_type_load($entity->entityType());
++    $crud_info = get_bundle_crud_info($entity_type->name, $entity->type);
+     $this->options['alter']['make_link'] = TRUE;
+-    $this->options['alter']['path'] = str_replace('%', $entity->id, $crud_info['edit']['path']);
++    $this->options['alter']['path'] = str_replace($entity_type->getMenuWildcard(), $entity->id, $crud_info['edit']['path']);
+     $text = !empty($this->options['text']) ? $this->options['text'] : t('edit');
+     
+     return $text;
