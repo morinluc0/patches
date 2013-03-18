@@ -1,0 +1,17 @@
+diff --git a/userprotect.module b/userprotect.module
+index db08b6d..5d82d9d 100644
+--- a/userprotect.module
++++ b/userprotect.module
+@@ -397,7 +397,11 @@ function userprotect_menu_alter(&$callbacks) {
+  */
+ function userprotect_user_edit_access($account) {
+   // Perform core's access check.
+-  if ((($GLOBALS['user']->uid == $account->uid) || user_access('administer users')) && $account->uid > 0) {
++  if (($GLOBALS['user']->uid == $account->uid) || (user_access('administer users')) && $account->uid > 0) {
++    //Custom check here to see if the user is a student remove the edit button completly.
++    if (in_array('authenticated user', $GLOBALS['user']->roles)) {
++      return FALSE;
++    }
+     // Check to see if the user's roles are protecting edits, or the user
+     // account itself is protected.
+     if (!userprotect_check_bypass('up_edit') && userprotect_get_user_protection($account, 'up_edit')) {
