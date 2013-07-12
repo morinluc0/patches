@@ -1,17 +1,24 @@
 diff --git a/userprotect.module b/userprotect.module
-index db08b6d..5d82d9d 100644
+index db08b6d..4373b37 100644
 --- a/userprotect.module
 +++ b/userprotect.module
-@@ -397,7 +397,11 @@ function userprotect_menu_alter(&$callbacks) {
+@@ -397,7 +397,7 @@ function userprotect_menu_alter(&$callbacks) {
   */
  function userprotect_user_edit_access($account) {
    // Perform core's access check.
 -  if ((($GLOBALS['user']->uid == $account->uid) || user_access('administer users')) && $account->uid > 0) {
-+  if (($GLOBALS['user']->uid == $account->uid) || (user_access('administer users')) && $account->uid > 0) {
-+    //Custom check here to see if the user is a student remove the edit button completly.
-+    if (in_array('authenticated user', $GLOBALS['user']->roles)) {
-+      return FALSE;
-+    }
++  if (($GLOBALS['user']->uid == $account->uid && user_access('edit own account')) || (user_access('administer users')) && $account->uid > 0) {
      // Check to see if the user's roles are protecting edits, or the user
      // account itself is protected.
      if (!userprotect_check_bypass('up_edit') && userprotect_get_user_protection($account, 'up_edit')) {
+@@ -475,6 +475,10 @@ function userprotect_permission() {
+       'description' => t('Set up access rules for user administrators for various user-related edits.'),
+       'restrict access' => TRUE,
+     ),
++    'edit own account' => array(
++      'title' => t('Edit own account'),
++      'description' => t('Allow users to have access to the edit tab.'),
++    ),
+   );
+ }
+ 
