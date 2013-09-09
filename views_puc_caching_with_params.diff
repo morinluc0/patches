@@ -1,0 +1,20 @@
+diff --git a/views_plugin_cache_time_per_user.inc b/views_plugin_cache_time_per_user.inc
+index a98eef0..82a0396 100644
+--- a/views_plugin_cache_time_per_user.inc
++++ b/views_plugin_cache_time_per_user.inc
+@@ -15,6 +15,7 @@ class views_plugin_cache_time_per_user extends views_plugin_cache_time {
+         'roles' => array_keys($user->roles),
+         'user' => $user->uid,
+         'language' => $GLOBALS['language'],
++        'input' => (!empty($this->view->exposed_raw_input))?array_shift(array_values($this->view->exposed_raw_input)):'',
+       );
+       foreach (array('exposed_info', 'page', 'sort', 'order') as $key) {
+         if (isset($_GET[$key])) {
+@@ -38,6 +39,7 @@ class views_plugin_cache_time_per_user extends views_plugin_cache_time {
+         'user' => $user->uid,
+         'theme' => $GLOBALS['theme'],
+         'language' => $GLOBALS['language'],
++        'input' => (!empty($this->view->exposed_raw_input))?array_shift(array_values($this->view->exposed_raw_input)):'',
+       );
+ 
+       $this->_output_key = $this->view->name . ':' . $this->display->id . ':output:' . md5(serialize($key_data));
