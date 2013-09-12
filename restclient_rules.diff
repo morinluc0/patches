@@ -1,8 +1,8 @@
 diff --git a/restclient.module b/restclient.module
-index 12108b9..c3b9a82 100644
+index 12108b9..5d310bd 100644
 --- a/restclient.module
 +++ b/restclient.module
-@@ -69,6 +69,55 @@ function restclient_wsconfig_connector_info() {
+@@ -69,6 +69,30 @@ function restclient_wsconfig_connector_info() {
    );
  }
  
@@ -30,35 +30,10 @@ index 12108b9..c3b9a82 100644
 +}
 +
 +
-+/**
-+ * Implements hook_rules_action_info().
-+ */
-+/**
-+function restclient_rules_action_info() {
-+  return array(
-+    'mail_rest_errors' => array(
-+      'group' => t('System'),
-+      'label' => t('Mail rest errors'),
-+      'parameter' => array(
-+        'response' => array(
-+          'type' => 'text',
-+          'label' => t('Response number.')
-+        ),
-+        'rest_callback' => array(
-+          'type' => 'text',
-+          'label' => t('The Rest call being called.')
-+        ),
-+      ),
-+    ),
-+  );
-+}
-+*/
-+
-+
  /**
   * Make a GET request
   *
-@@ -163,10 +212,12 @@ function restclient_get($resource_path, $variables = array()) {
+@@ -163,10 +187,12 @@ function restclient_get($resource_path, $variables = array()) {
          cache_set($cid, $response, 'cache_restclient', $expires);
        }
      }
