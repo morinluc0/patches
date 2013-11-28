@@ -1,0 +1,289 @@
+diff --git a/addressfield.module b/addressfield.module
+index c010514..98e263d 100644
+--- a/addressfield.module
++++ b/addressfield.module
+@@ -317,10 +317,96 @@ function addressfield_element_info() {
+     '#attributes' => array(),
+     '#tag' => 'div',
+   );
++
++  $types['addressfield'] = array(
++    '#process' => array('addressfield_element_process'),
++    '#context' => array('mode' => 'form'),
++    '#handlers' => array('address' => 'address'),
++    '#inline' => FALSE,
++  );
++
+   return $types;
+ }
+ 
+ /**
++ * Addressfield process function.
++ */
++function addressfield_element_process($element, &$form_state, $form) {
++  // Inject context defaults.
++  $element['#context'] += array(
++    'mode' => 'form',
++    'countries' => array(),
++    'element' => $element,
++  );
++
++  // Generate a specific key used to identify this element to restore a default
++  // value upon AJAX submission regardless of where this element is in the
++  // $form array.
++  if (isset($element['#entity_type'])) {
++    $element_key = implode('|', array($element['#entity_type'], $element['#bundle'], $element['#field_name'], $element['#language'], $element['#delta']));
++  }
++  else {
++    $element_key = implode('|', $element['#array_parents']);
++  }
++  // Store the key in the element array as a value so it can be easily retrieved
++  // in context in the $form_state['values'] array in the element validator.
++  $element['address']['element_key'] = array(
++    '#type' => 'value',
++    '#value' => $element_key,
++  );
++
++  // Get the default address used to build the widget form elements, looking
++  // first in the form state, then in the default values of the element.
++  $address = array();
++  if (!empty($form_state['addressfield'][$element_key])) {
++    $address = $form_state['addressfield'][$element_key];
++  }
++  elseif (isset($element['#default_value'])) {
++    $address = (array) $element['#default_value'];
++  }
++
++  // This magic makes sure that the country array format is consistent and can
++  // be compared to the full country list, by key, no matter the source. Users
++  // embedding addressfields into forms may a flat array of country codes while
++  // the form settings supplies can return its usual identically keyed and valued
++  // array of country codes.
++  if (count($element['#context']['countries'])) {
++    $element['#context']['countries'] = array_combine($element['#context']['countries'], $element['#context']['countries']);
++  }
++
++  // Merge in our default values to make sure no indexes are missing
++  $address += addressfield_default_values($element['#context']['countries']);
++
++  // Wrap everything in a fieldset. This is not the best looking element,
++  // but it's the only wrapper available in Drupal we can properly use
++  // in that context, and it can be switched to a generic container FAPI element
++  // if necessary by setting the addressfield's #inline property to TRUE.
++  $element['address'] += addressfield_generate($address, $element['#handlers'], $element['#context']);
++
++  $element['address']['#type'] = (isset($element['#inline']) && $element['#inline'] == TRUE ? 'container' : 'fieldset');
++  if (isset($element['#title'])) {
++    $element['address']['#title'] = $element['#title'];
++  }
++
++  // Set the element to required based on the passed in required flag.
++  $element['address']['#required'] = isset($element['#required']) ? $element['#required'] : FALSE;
++
++  // Set the #parents of the children of this element so they appear at the same
++  // level as the parent.
++  foreach (element_children($element['address']) as $key) {
++    $element['address'][$key]['#parents'] = $element['#parents'];
++    $element['address'][$key]['#parents'][] = $key;
++  }
++  unset($element['address']['street_block']['premise']);
++  $element['address']['street_block']['thoroughfare']['#title'] =  strtoupper(t('Address'));
++  $element['address']['country']['#title'] = strtoupper($element['address']['country']['#title']);
++  $element['address']['locality_block']['locality']['#title'] = strtoupper($element['address']['locality_block']['locality']['#title']);
++  $element['address']['locality_block']['administrative_area']['#title'] = strtoupper($element['address']['locality_block']['administrative_area']['#title']);
++  $element['address']['locality_block']['postal_code']['#title'] = strtoupper($element['address']['locality_block']['postal_code']['#title']);
++  return $element;
++}
++
++/**
+  * Form API process function: set the #parents of the children of this element so they appear at the same level as the parent.
+  */
+ function addressfield_widget_process($element) {
+@@ -479,28 +565,11 @@ function addressfield_field_widget_settings_form($field, $instance) {
+ function addressfield_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+   $settings = $instance['widget']['settings'];
+ 
+-  // Generate a specific key used to identify this element to restore a default
+-  // value upon AJAX submission regardless of where this element is in the
+-  // $form array.
+-  $element_key = implode('|', array($element['#entity_type'], $element['#bundle'], $element['#field_name'], $element['#language'], $element['#delta']));
+-
+-  // Store the key in the element array as a value so it can be easily retrieved
+-  // in context in the $form_state['values'] array in the element validator.
+-  $element['element_key'] = array(
+-    '#type' => 'value',
+-    '#value' => $element_key,
+-  );
+-
+   // Get the default address used to build the widget form elements, looking
+-  // first in the form state, then in the stored value for the field, and then
+-  // in the default values of the instance.
++  // first in the stored value for the field and then in the default values of
++  // the instance.
+   $address = array();
+-
+-  if (!empty($form_state['addressfield'][$element_key])) {
+-    // Use the value from the form_state if available.
+-    $address = $form_state['addressfield'][$element_key];
+-  }
+-  elseif (!empty($items[$delta]['country'])) {
++  if (!empty($items[$delta]['country'])) {
+     // Else use the saved value for the field.
+     $address = $items[$delta];
+   }
+@@ -511,32 +580,30 @@ function addressfield_field_widget_form(&$form, &$form_state, $field, $instance,
+ 
+   // Determine the list of available countries, and if the currently selected
+   // country is not in it, unset it so it can be reset to the default country.
+-  $countries = _addressfield_country_options_list($field, $instance);
+-  if (!empty($address['country']) && !isset($countries[$address['country']])) {
++  $available_countries = _addressfield_available_countries_for_field($field, $instance);
++  if (!empty($address['country']) && $available_countries && !isset($available_countries[$address['country']])) {
+     unset($address['country']);
+   }
+ 
+-  // Merge in default values to provide a value for every expected array key.
+-  $address += addressfield_default_values($countries);
+-
+   // Add the form elements for the standard widget, which includes a country
+   // select list at the top that reloads the available address elements when the
+   // country is changed.
+   if ($instance['widget']['type'] == 'addressfield_standard') {
+-    // Wrap everything in a fieldset. This is not the best looking element,
+-    // but it's the only wrapper available in Drupal we can properly use
+-    // in that context, and it is overridable if necessary.
+-    $element['#type'] = 'fieldset';
+-
+-    // Generate the address form.
+     $context = array(
++      'countries' => $available_countries,
+       'mode' => 'form',
+       'field' => $field,
+       'instance' => $instance,
+       'langcode' => $langcode,
+       'delta' => $delta,
+     );
+-    $element += addressfield_generate($address, $settings['format_handlers'], $context);
++
++    $element += array(
++      '#type' => 'addressfield',
++      '#context' => $context,
++      '#handlers' => $settings['format_handlers'],
++      '#default_value' => $address,
++    );
+ 
+     // Mark the form element as required if necessary.
+     $element['#required'] = $delta == 0 && $instance['required'];
+@@ -550,11 +617,6 @@ function addressfield_field_widget_form(&$form, &$form_state, $field, $instance,
+  * current address value in the $form_state for retrieval on rebuild.
+  */
+ function addressfield_standard_country_validate($element, &$form_state) {
+-  // If the country was changed, rebuild the form.
+-  if ($element['#default_value'] != $element['#value']) {
+-    $form_state['rebuild'] = TRUE;
+-  }
+-
+   $parents = $element['#parents'];
+   array_pop($parents);
+ 
+@@ -808,38 +870,56 @@ function addressfield_data_property_info($name = NULL) {
+ }
+ 
+ /**
+- * Wraps country_get_list() for use as an Entity API options list.
++ * Returns the list of allowed countries as per the field settings, or an empty
++ * array to indicate no limitations.
+  */
+-function _addressfield_country_options_list($field = NULL, $instance = NULL) {
+-  // Necessary for country_get_list().
+-  require_once DRUPAL_ROOT . '/includes/locale.inc';
+-
+-  $countries = country_get_list();
+-
++function _addressfield_available_countries_for_field($field = NULL, $instance = NULL) {
++  $instances = array();
+   if (isset($field)) {
+     // If the instance is not specified, loop against all the instances of the field.
+     if (!isset($instance)) {
+-      $instances = array();
+       foreach ($field['bundles'] as $entity_type => $bundles) {
+         foreach ($bundles as $bundle_name) {
+-          $instances[] = field_info_instance($entity_type, $field['field_name'], $bundle_name);
++          $instance = field_info_instance($entity_type, $field['field_name'], $bundle_name);
++          if (!empty($instance['widget']['settings']['available_countries'])) {
++            $instances[] = $instance['widget']['settings']['available_countries'];
++          }
+         }
+       }
+     }
+     else {
+       $instances = array($instance);
+     }
++  }
+ 
+-    foreach ($instances as $instance) {
+-      if (!empty($instance['widget']['settings']['available_countries'])) {
+-        $countries = array_intersect_key($countries, $instance['widget']['settings']['available_countries']);
+-      }
+-      else {
+-        // This instance allow all the countries.
+-        $countries = country_get_list();
+-        break;
+-      }
++  $available_countries = array();
++  foreach ($instances as $instance) {
++    if (!empty($instance['widget']['settings']['available_countries'])) {
++      $available_countries += $instance['widget']['settings']['available_countries'];
+     }
++    else {
++      // This instance allow all the countries.
++      $available_countries = array();
++    }
++  }
++
++  return $available_countries;
++}
++
++/**
++ * Wraps country_get_list() for use as an Entity API options list.
++ */
++function _addressfield_country_options_list($available_countries = array()) {
++  // Necessary for country_get_list().
++  require_once DRUPAL_ROOT . '/includes/locale.inc';
++  $countries = country_get_list();
++
++  if (!is_array($available_countries)) {
++    $available_countries = array($available_countries);
++  }
++
++  if (!empty($available_countries)) {
++    $countries = array_intersect_key($countries, $available_countries);
+   }
+ 
+   return $countries;
+diff --git a/plugins/format/address.inc b/plugins/format/address.inc
+index d5426ad..2e3c7c3 100644
+--- a/plugins/format/address.inc
++++ b/plugins/format/address.inc
+@@ -511,7 +511,7 @@ function addressfield_format_address_generate(&$format, $address, $context = arr
+   if ($context['mode'] == 'form') {
+     // Provide a wrapper ID for AJAX replacement based on country selection.
+     if (!isset($format['#wrapper_id'])) {
+-      $format['#wrapper_id'] = drupal_html_id('addressfield-wrapper');
++      $format['#wrapper_id'] = $context['element']['#id'];
+       $format['#prefix'] = '<div id="' . $format['#wrapper_id'] . '">';
+       $format['#suffix'] = '</div>';
+     }
+@@ -519,9 +519,9 @@ function addressfield_format_address_generate(&$format, $address, $context = arr
+     // Form mode, move the country selector to the top of the form.
+     $format['country']['#weight'] = -10;
+ 
+-    // Limit it to the countries supported by the widget.
+-    if (isset($context['field'])) {
+-      $format['country']['#options'] = _addressfield_country_options_list($context['field'], $context['instance']);
++    // Limit it to the countries supported by the context.
++    if (count($context['countries'])) {
++      $format['country']['#options'] = _addressfield_country_options_list($context['countries']);
+     }
+ 
+     // AJAX enable it.
