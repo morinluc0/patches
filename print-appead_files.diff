@@ -1,0 +1,28 @@
+diff --git a/print_pdf/print_pdf.module b/print_pdf/print_pdf.module
+index 0cdff67..1d432dc 100644
+--- a/print_pdf/print_pdf.module
++++ b/print_pdf/print_pdf.module
+@@ -544,6 +544,23 @@ function print_pdf_generate_html($html, $meta, $filename = NULL, $paper_size = N
+   if (function_exists($function)) {
+     $pdf = $function($html, $meta, $paper_size, $page_orientation);
+   }
++  $pdf_file = file_save_data($pdf);
++  $output = "public://" . $meta['node']->nid . ".pdf";
++
++  $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=" . drupal_realpath($output) . " ";
++  $cmd .= drupal_realpath($pdf_file->uri)." ";
++
++  foreach($meta['node']->field_append_files[LANGUAGE_NONE] as $append_file) {
++    $cmd .= drupal_realpath($append_file['uri'])." ";
++    
++  }
++  $result = shell_exec($cmd);
++  $pdf = file_get_contents(drupal_realpath($output));
++  
++  //Cleanup
++  file_delete($pdf_file);
++  unlink($output);   
++
+   if ($filename) {
+     return print_pdf_dispose_content($pdf, $filename);
+   }
