@@ -1,27 +1,41 @@
+diff --git a/print.pages.inc b/print.pages.inc
+index acf3973..c668f2c 100644
+--- a/print.pages.inc
++++ b/print.pages.inc
+@@ -171,7 +171,7 @@ function print_preprocess_print(&$variables) {
+   $variables['print_title']                    = check_plain($node->title);
+   $variables['head']                     = drupal_get_html_head();
+   $variables['robots_meta']              = _print_robots_meta_generator();
+-  $variables['css']                      = _print_css_generator($variables['expand_css']);
++  $variables['css']                      = _print_css_generator(TRUE);
+ 
+   if (variable_get('print_html_sendtoprinter', PRINT_HTML_SENDTOPRINTER_DEFAULT) && ($format == 'html')) {
+     drupal_add_js('misc/drupal.js', array('weight' => JS_LIBRARY));
 diff --git a/print_pdf/print_pdf.module b/print_pdf/print_pdf.module
-index 0cdff67..1d432dc 100644
+index 0cdff67..801c93e 100644
 --- a/print_pdf/print_pdf.module
 +++ b/print_pdf/print_pdf.module
-@@ -544,6 +544,23 @@ function print_pdf_generate_html($html, $meta, $filename = NULL, $paper_size = N
+@@ -544,6 +544,24 @@ function print_pdf_generate_html($html, $meta, $filename = NULL, $paper_size = N
    if (function_exists($function)) {
      $pdf = $function($html, $meta, $paper_size, $page_orientation);
    }
-+  $pdf_file = file_save_data($pdf);
-+  $output = "public://" . $meta['node']->nid . ".pdf";
++  if (isset($meta['node']->field_append_files[LANGUAGE_NONE])) {
++    $pdf_file = file_save_data($pdf);
++    $output = "public://" . $meta['node']->nid . ".pdf";
 +
-+  $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=" . drupal_realpath($output) . " ";
-+  $cmd .= drupal_realpath($pdf_file->uri)." ";
++    $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=" . drupal_realpath($output) . " ";
++    $cmd .= drupal_realpath($pdf_file->uri)." ";
 +
-+  foreach($meta['node']->field_append_files[LANGUAGE_NONE] as $append_file) {
-+    $cmd .= drupal_realpath($append_file['uri'])." ";
-+    
++    foreach($meta['node']->field_append_files[LANGUAGE_NONE] as $append_file) {
++      $cmd .= drupal_realpath($append_file['uri'])." ";
++    }
++    $result = shell_exec($cmd);
++    $pdf = file_get_contents(drupal_realpath($output));
++
++    //Cleanup
++    file_delete($pdf_file);
++    unlink($output);   
 +  }
-+  $result = shell_exec($cmd);
-+  $pdf = file_get_contents(drupal_realpath($output));
-+  
-+  //Cleanup
-+  file_delete($pdf_file);
-+  unlink($output);   
 +
    if ($filename) {
      return print_pdf_dispose_content($pdf, $filename);
