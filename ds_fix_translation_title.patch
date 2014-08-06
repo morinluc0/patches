@@ -1,0 +1,13 @@
+diff --git a/ds.module b/ds.module
+index 8116a0a..8fac96d 100644
+--- a/ds.module
++++ b/ds.module
+@@ -549,7 +549,7 @@ function ds_field_attach_view_alter(&$build, $context) {
+           '#theme' => 'field',
+           '#field_type' => 'ds',
+           '#skip_edit' => TRUE,
+-          '#title' => $field['title'],
++          '#title' => t($field['title']),
+           '#weight' => isset($field_values[$key]['weight']) ? $field_values[$key]['weight'] : 0,
+           '#label_display' => isset($field_values[$key]['label']) ? $field_values[$key]['label'] : 'inline',
+           '#field_name' => $key,
