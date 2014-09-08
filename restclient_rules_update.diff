@@ -1,0 +1,66 @@
+diff --git a/restclient.module b/restclient.module
+index 12108b9..9400b61 100644
+--- a/restclient.module
++++ b/restclient.module
+@@ -116,13 +116,11 @@ function restclient_get($resource_path, $variables = array()) {
+   if (!empty($variables['parameters'])) {
+     _restclient_prepare_url_parameters($variables);
+   }
+-
+   // Build the URL
+   $url = _restclient_build_resource_path($resource_path, $variables);
+-  
++
+   // Generate the cache id
+   $cid = _restclient_generate_cid( 'GET', $url, $variables['headers']);
+-
+   // Check the cache
+   if (!$reset) {
+     $data = cache_get($cid, 'cache_restclient');
+@@ -167,6 +165,7 @@ function restclient_get($resource_path, $variables = array()) {
+     // No error occured, return the response
+     return $response;
+   }
++  rules_invoke_event('rest_get_failure', $response->code, $url, print_r($response));
+ 
+   // Log the error and return FALSE
+   _restclient_watchdog('GET', $response->code,  $response->error, $url);
+@@ -719,7 +718,6 @@ function restclient_curl_http_request($url, $options = array()) {
+ 
+   // Attempt the connection
+   $response = curl_exec($ch);
+-
+   // Get Response Info
+   $info = curl_getinfo($ch);
+ 
+@@ -1063,3 +1061,30 @@ function _restclient_watchdog($method, $code, $error, $url, $extra = array()) {
+   );
+ }
+ 
++/**
++ * Implements hook_rules_event_info().
++ */
++function restclient_rules_event_info() {
++  return array(
++    'rest_get_failure' => array(
++      'label' => t('Rest call failed'),
++      'group' => t('Rest'),
++      'variables' => array(
++        'response' => array(
++          'type' => 'text',
++          'label' => t('Response number.')
++        ),
++        'rest_callback' => array(
++          'type' => 'text',
++          'label' => t('The Rest call being called.')
++        ),
++        'header' => array(
++          'type' => 'text',
++          'label' => t('print_r of the header')
++        ),
++      ),
++    ),
++  );
++}
++
++
