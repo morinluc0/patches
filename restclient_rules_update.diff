@@ -1,5 +1,5 @@
 diff --git a/restclient.module b/restclient.module
-index 12108b9..82037f5 100644
+index 12108b9..b7db06a 100644
 --- a/restclient.module
 +++ b/restclient.module
 @@ -116,13 +116,11 @@ function restclient_get($resource_path, $variables = array()) {
@@ -25,7 +25,16 @@ index 12108b9..82037f5 100644
  
    // Log the error and return FALSE
    _restclient_watchdog('GET', $response->code,  $response->error, $url);
-@@ -719,7 +718,6 @@ function restclient_curl_http_request($url, $options = array()) {
+@@ -265,6 +264,8 @@ function restclient_post($resource_path, $variables = array()) {
+     // No error occured, return the response
+     return $response;
+   }
++  rules_invoke_event('rest_get_failure', $response->code, $url, serialize($response));
++
+   // Log the error and return FALSE
+   _restclient_watchdog('POST', $response->code,  $response->error, $url, $response);
+   return FALSE;
+@@ -719,7 +720,6 @@ function restclient_curl_http_request($url, $options = array()) {
  
    // Attempt the connection
    $response = curl_exec($ch);
@@ -33,7 +42,7 @@ index 12108b9..82037f5 100644
    // Get Response Info
    $info = curl_getinfo($ch);
  
-@@ -1063,3 +1061,30 @@ function _restclient_watchdog($method, $code, $error, $url, $extra = array()) {
+@@ -1063,3 +1063,30 @@ function _restclient_watchdog($method, $code, $error, $url, $extra = array()) {
    );
  }
  
