@@ -1,0 +1,26 @@
+Index: uo_google_app_email.inc
+===================================================================
+--- uo_google_app_email.inc	(revision 7733)
++++ uo_google_app_email.inc	(working copy)
+@@ -134,11 +134,21 @@
+     $email_array = $cache->data;
+   }
+   else {
++    $time = microtime(TRUE);
+     $imap = new Zend_Mail_Protocol_Imap('imap.googlemail.com', '993', true);
++    $connected_time = microtime(TRUE);
+     if (uo_google_app_email_oauth2_authenticate($imap, $email, $access_token)) {
+       $inbox = uo_google_app_email_get_inbox($imap);
++      $inbox_time = microtime(TRUE);
+       if ($inbox) {
+         $email_array['unread_count'] = uo_google_app_email_get_inbox_unread_count($imap);
++        $unread_time = microtime(TRUE);
++        watchdog(
++          'uo_google_app_email',
++          'connected : @connected , inbox: @inbox , unread: @unread',
++          array('@connected' => $connected_time, '@inbox' => $inbox_time, '@unread' => $unread_time ),
++          WATCHDOG_ERROR
++        );
+         if (variable_get('uo_google_app_email_fetch_title', FALSE)) {
+           $email_array['messages'] = array();
+           $display_count = 0;
