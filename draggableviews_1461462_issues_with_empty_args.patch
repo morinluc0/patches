@@ -1,0 +1,24 @@
+diff --git a/views/draggableviews_join_handler.inc b/views/draggableviews_join_handler.inc
+index 29dabd6..3028dcf 100644
+--- a/views/draggableviews_join_handler.inc
++++ b/views/draggableviews_join_handler.inc
+@@ -69,8 +69,10 @@ class draggableviews_join_handler extends views_join {
+         $clone_view = clone $view;
+         $view_arguments = _draggableviews_eval_return($view->sort[$weight_key]->options['draggableviews_setting_arguments_php'], $view_arguments, $clone_view);
+       }
+-      $condition .= " AND $table[alias].args = :view_arguments";
+-      $arguments[':view_arguments'] = json_encode($view_arguments);
++      if ($view_query->view->sort[$weight_key]->options['draggableviews_setting_arguments'] != 'none') {
++        $condition .= " AND $table[alias].args = :view_arguments";
++        $arguments[':view_arguments'] = json_encode($view_arguments);
++      }
+     }
+ 
+     $select_query->addJoin($this->type, $right_table, $table['alias'], $condition, $arguments);
+@@ -83,4 +85,4 @@ class draggableviews_join_handler extends views_join {
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}
