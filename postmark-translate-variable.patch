@@ -1,0 +1,32 @@
+diff --git a/postmark.mail.inc b/postmark.mail.inc
+index a8884bf..54c891b 100644
+--- a/postmark.mail.inc
++++ b/postmark.mail.inc
+@@ -60,7 +60,7 @@ class PostmarkMailSystem implements MailSystemInterface {
+ 		$address = postmark_parse_address($message['from']);
+ 		$sender = $address[0]['mail'];
+ 		$name = $address[0]['name'];
+-		$from = variable_get('site_mail', ini_get('sendmail_from'));
++		$from = i18n_variable_get('site_mail', $message['language']->language, ini_get('sendmail_from'));
+ 		$postmark_mail->from($from);
+ 		$postmark_mail->subject($message['subject']);
+ 
+@@ -118,18 +118,9 @@ class PostmarkMailSystem implements MailSystemInterface {
+ 		// Check the header content type to see if email is plain text
+ 		// if not we send as HTML
+ 		if (strpos($message['headers']['Content-Type'], 'text/plain') !== FALSE) {
+-			if ($sender != $from) {
+-				$message['body'] .= "\r\n\r\n";
+-				$message['body'] .= t('Message sent by').":\r\n";
+-				$message['body'] .= $fullsender;
+-			}
+-
+ 			$postmark_mail->messagePlain($message['body']);
+ 		}
+ 		else {
+-			if ($sender != $from) {
+-				$message['body'] .= "<p>".t('Message sent by').":<br />".$fullsender."</p>";
+-			}
+ 			$postmark_mail->messageHtml($message['body']);
+ 		}
+ 
